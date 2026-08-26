@@ -2,7 +2,6 @@
 
 ## [1.1.0](https://github.com/ScottGibb/Fusion-360-CAD-Exporter/compare/v1.0.0...v1.1.0) (2026-08-26)
 
-
 ### Features
 
 * add image generation for thumbnail ([9c5bf4d](https://github.com/ScottGibb/Fusion-360-CAD-Exporter/commit/9c5bf4d9e8278e3d058aa23a4699b2c34f5d44d9))
