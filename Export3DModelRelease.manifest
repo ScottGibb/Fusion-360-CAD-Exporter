@@ -1,0 +1,10 @@
+{
+  "autodeskProduct": "Fusion360",
+  "type": "addin",
+  "id": "3d-model-release-exporter",
+  "author": "Scott Gibb",
+  "description": "Export a versioned 3D model release package.",
+  "version": "1.0.0",
+  "runOnStartup": false,
+  "supportedOS": "mac|windows"
+}
