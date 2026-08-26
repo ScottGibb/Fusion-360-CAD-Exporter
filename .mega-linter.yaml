@@ -40,4 +40,3 @@ OUTPUT_DETAIL: detailed
 
 #  Linter Configuration
 MARKDOWN_MARKDOWNLINT_CONFIG_FILE: .markdownlint.json
-
