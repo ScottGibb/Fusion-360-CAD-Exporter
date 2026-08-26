@@ -2,14 +2,12 @@
 
 ## 1.0.0 (2026-08-26)
 
-
 ### Features
 
 * Add CI Infrastructure ([88ba596](https://github.com/ScottGibb/Fusion-360-CAD-Exporter/commit/88ba59635cf92643fd5d367866b391bbf25dcc5c))
 * add megalinter skills ([0ebab82](https://github.com/ScottGibb/Fusion-360-CAD-Exporter/commit/0ebab82c40b96b1a705a9cca089d96299253c3fb))
 * Add working 3D Model Exporter ([e82cc8d](https://github.com/ScottGibb/Fusion-360-CAD-Exporter/commit/e82cc8dc54e14abe6e06a37cabf205521d88572c))
 * **ci:** add manifest updater workflow ([668de81](https://github.com/ScottGibb/Fusion-360-CAD-Exporter/commit/668de813bc41a373c97c200022467c0547058862))
-
 
 ### Bug Fixes
 
