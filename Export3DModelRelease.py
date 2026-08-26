@@ -1,131 +1,322 @@
+"""Fusion 360 add-in: export a full design release.
+
+Adds a command to the Solid > Scripts and Add-Ins panel that, for the
+active design, exports:
+
+* The whole assembly as a Fusion archive (.f3d), a STEP file, and a
+  merged STL.
+* Every solid body in the design as its own STL, ready for 3D printing —
+  bodies sitting directly in the root component and bodies inside any
+  occurrence, at any nesting depth.
+
+The export destination is chosen through Fusion's native folder
+browser rather than typed in by hand.
+"""
+
 import adsk.core
 import adsk.fusion
-import adsk.drawing
 import json
 import os
 import traceback
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Tuple
 
-handlers = []
+handlers: List[adsk.core.EventHandler] = []
 COMMAND_ID = 'Export3DModelReleaseCommand'
 COMMAND_NAME = 'Export 3D Model Release'
 
+# Holds the folder chosen via the file explorer dialog for the current
+# command invocation. Command inputs have no native "browse" widget, so a
+# button input triggers the dialog and the result is stashed here for
+# Execute to read.
+_selected_folder: Dict[str, str] = {'path': ''}
 
-def _drawing_documents(app):
-    # Fusion does not expose a reliable drawing marker without activating a
-    # document. List open documents and validate the selected one as a drawing
-    # immediately before exporting.
-    return [app.documents.item(i) for i in range(app.documents.count)]
+
+def _sanitize_filename(text: str) -> str:
+    """Replace characters that are unsafe in filenames with a hyphen.
+
+    Args:
+        text: Raw name (a design, component, or body name) that may
+            contain spaces or other characters unsafe for filenames.
+
+    Returns:
+        text with every character that isn't alphanumeric, '-', or '_'
+        replaced by '-'.
+    """
+    return ''.join(char if char.isalnum() or char in '-_' else '-' for char in text)
 
 
 class CommandCreated(adsk.core.CommandCreatedEventHandler):
-    def notify(self, args):
-        command = args.command
-        inputs = command.commandInputs
-        inputs.addStringValueInput('releaseName', 'Release name', '')
-        inputs.addStringValueInput('version', 'Version', '1')
-        inputs.addStringValueInput('folder', 'Release folder', '')
-        selected = inputs.addSelectionInput('components', 'Printable components',
-                                             'Select each component to export as STL')
-        selected.addSelectionFilter('Occurrences')
-        selected.setSelectionLimits(1, 0)
-        app = adsk.core.Application.get()
-        drawings = _drawing_documents(app)
-        choice = inputs.addDropDownCommandInput('drawing', 'Open drawing',
-            adsk.core.DropDownStyles.TextListDropDownStyle)
-        for doc in drawings:
-            choice.listItems.add(doc.name, choice.listItems.count == 0, doc.name)
+    """Builds the command dialog: just the folder-browse button, wiring up
+    the InputChanged/Execute handlers. The release name and version come
+    from the design's own saved file, so no fields for them are needed.
+    """
+
+    def notify(self, args: adsk.core.CommandCreatedEventArgs) -> None:
+        """Populate the command dialog's inputs.
+
+        Args:
+            args: Event args for the command-created event; args.command
+                is the new command whose commandInputs are populated here.
+        """
+        command: adsk.core.Command = args.command
+        inputs: adsk.core.CommandInputs = command.commandInputs
+
+        # "Browse..." button (a non-checkbox BoolValueInput renders as a
+        # button) plus a read-only text box that echoes the chosen path.
+        inputs.addBoolValueInput('chooseFolder', 'Choose export folder...', False, '', False)
+        inputs.addTextBoxCommandInput('folderPath', 'Export folder', 'No folder selected', 2, True)
+
+        _selected_folder['path'] = ''
+
+        input_changed = InputChanged()
+        command.inputChanged.add(input_changed)
+        handlers.append(input_changed)
+
         execute = Execute()
         command.execute.add(execute)
         handlers.append(execute)
 
 
+class InputChanged(adsk.core.InputChangedEventHandler):
+    """Opens the folder browser when the "Choose export folder..." button
+    is clicked, and writes the chosen path back into the dialog.
+    """
+
+    def notify(self, args: adsk.core.InputChangedEventArgs) -> None:
+        """Handle a command-input change event.
+
+        Only reacts to the 'chooseFolder' button; all other input changes
+        are ignored.
+
+        Args:
+            args: Event args identifying which input changed
+                (args.input) and its owning command
+                (args.input.parentCommand).
+        """
+        changed_input: adsk.core.CommandInput = args.input
+        if changed_input.id != 'chooseFolder':
+            return
+
+        app: adsk.core.Application = adsk.core.Application.get()
+        ui: adsk.core.UserInterface = app.userInterface
+        dialog: adsk.core.FolderDialog = ui.createFolderDialog()
+        dialog.title = 'Choose export folder'
+
+        if dialog.showDialog() == adsk.core.DialogResults.DialogOK:
+            _selected_folder['path'] = dialog.folder
+            folder_input: adsk.core.TextBoxCommandInput = changed_input.parentCommand.commandInputs.itemById('folderPath')
+            folder_input.text = dialog.folder
+
+
 class Execute(adsk.core.CommandEventHandler):
-    def notify(self, args):
-        ui = None
+    """Runs the actual export once the user confirms the command dialog."""
+
+    def notify(self, args: adsk.core.CommandEventArgs) -> None:
+        """Validate inputs, then export the assembly and its parts.
+
+        Exports, in order: a Fusion archive, a STEP file, and a merged
+        STL for the whole design, followed by one STL per solid body,
+        then writes a small JSON manifest describing what was exported.
+        The filename prefix is derived from the source design's saved
+        file name and version rather than being typed in. Any failure is
+        caught and shown in a message box rather than raised, since
+        Fusion add-in commands have no console.
+
+        Args:
+            args: Event args for the command-execute event (unused
+                directly; state is read from _selected_folder and from
+                the active design's saved data file).
+        """
+        ui: adsk.core.UserInterface = None
         try:
-            app = adsk.core.Application.get()
+            app: adsk.core.Application = adsk.core.Application.get()
             ui = app.userInterface
-            inputs = args.command.commandInputs
-            name = inputs.itemById('releaseName').value.strip()
-            version = inputs.itemById('version').value.strip()
-            folder = inputs.itemById('folder').value.strip()
-            selection = inputs.itemById('components')
-            drawing_input = inputs.itemById('drawing')
-            if not name or not version or not folder or selection.selectionCount == 0:
-                raise ValueError('Release name, version, folder, and at least one printable component are required.')
-            if drawing_input.selectedItem is None:
-                raise ValueError('Open the associated drawing before exporting; a drawing PDF is required.')
+            folder: str = _selected_folder['path']
+
+            if not folder:
+                raise ValueError('Choose an export folder before running the export.')
+
+            design: adsk.fusion.Design = adsk.fusion.Design.cast(app.activeProduct)
+            if not design:
+                raise ValueError('Activate a Fusion design before running this command.')
+            if not app.activeDocument.dataFile:
+                raise ValueError('Save the Fusion design before exporting.')
+
             if os.path.isdir(folder) and os.listdir(folder):
-                answer = ui.messageBox('The release folder is not empty. Replace files for this version?', COMMAND_NAME,
-                    adsk.core.MessageBoxButtonTypes.YesNoButtonType)
+                answer = ui.messageBox(
+                    'The export folder is not empty. Replace files for this version?',
+                    COMMAND_NAME, adsk.core.MessageBoxButtonTypes.YesNoButtonType)
                 if answer != adsk.core.DialogResults.DialogYes:
                     return
             os.makedirs(folder, exist_ok=True)
-            design = adsk.fusion.Design.cast(app.activeProduct)
-            if not design:
-                raise ValueError('Activate the saved Fusion design before running this command.')
-            if not app.activeDocument.dataFile:
-                raise ValueError('Save the Fusion design before exporting.')
-            prefix = f'{name}-v{version}'
-            manager = design.exportManager
-            for index in range(selection.selectionCount):
-                occurrence = adsk.fusion.Occurrence.cast(selection.selection(index).entity)
-                component_name = ''.join(char if char.isalnum() or char in '-_' else '-' for char in occurrence.name)
-                options = manager.createSTLExportOptions(occurrence, os.path.join(folder, f'{prefix}-{component_name}'))
-                options.sendToPrintUtility = False
-                if not manager.execute(options):
-                    raise RuntimeError(f'STL export failed for {occurrence.name}')
-            step = manager.createSTEPExportOptions(os.path.join(folder, f'{prefix}-assembly.step'), design.rootComponent)
-            archive = manager.createFusionArchiveExportOptions(os.path.join(folder, prefix), design.rootComponent)
-            if not manager.execute(step) or not manager.execute(archive):
-                raise RuntimeError('Assembly STEP or Fusion archive export failed.')
-            selected_drawing = drawing_input.selectedItem.name
-            drawing_doc = next(doc for doc in _drawing_documents(app) if doc.name == selected_drawing)
-            design_doc = app.activeDocument
-            drawing_doc.activate()
-            drawing = adsk.drawing.Drawing.cast(app.activeProduct)
-            if not drawing:
-                raise ValueError('The selected open document is not a Fusion drawing.')
-            drawing_options = drawing.exportManager.createPDFExportOptions(os.path.join(folder, f'{prefix}-drawing.pdf'))
-            if not drawing.exportManager.execute(drawing_options):
-                raise RuntimeError('Drawing PDF export failed.')
-            design_doc.activate()
-            source = design_doc.dataFile
-            export_record = {
-                'source_design': {'id': source.id, 'version': source.versionNumber, 'name': source.name},
-                'selected_components': [selection.selection(i).entity.name for i in range(selection.selectionCount)],
-                'exported_at': datetime.now(timezone.utc).isoformat()
-            }
-            with open(os.path.join(folder, 'fusion-export.json'), 'w', encoding='utf-8') as record:
-                json.dump(export_record, record, indent=2)
-            ui.messageBox(f'Release exports completed in:\n{folder}\n\nRun build_release.py to validate the pack.', COMMAND_NAME)
+
+            source: adsk.core.DataFile = app.activeDocument.dataFile
+            prefix: str = f'{_sanitize_filename(source.name)}-v{source.versionNumber}'
+            root: adsk.fusion.Component = design.rootComponent
+            manager: adsk.fusion.ExportManager = design.exportManager
+
+            _export_assembly(manager, root, folder, prefix)
+            exported_bodies: List[str] = _export_bodies(manager, root, folder, prefix)
+            _write_manifest(app, folder, exported_bodies)
+
+            ui.messageBox(f'Release exports completed in:\n{folder}', COMMAND_NAME)
         except Exception:
             if ui:
                 ui.messageBox('Export failed:\n{}'.format(traceback.format_exc()), COMMAND_NAME)
 
 
-def run(context):
-    app = adsk.core.Application.get()
-    ui = app.userInterface
-    command = ui.commandDefinitions.itemById(COMMAND_ID)
-    if command:
-        command.deleteMe()
-    command = ui.commandDefinitions.addButtonDefinition(COMMAND_ID, COMMAND_NAME,
-        'Export STL, STEP, F3D, and drawing PDF for a versioned release.')
+def _export_assembly(
+    manager: adsk.fusion.ExportManager,
+    root: adsk.fusion.Component,
+    folder: str,
+    prefix: str,
+) -> None:
+    """Export the whole design as a Fusion archive, STEP, and merged STL.
+
+    Args:
+        manager: The active design's export manager.
+        root: The design's root component (exported as a single unit).
+        folder: Destination directory for the exported files.
+        prefix: Filename prefix, derived from the source file's name and version.
+
+    Raises:
+        RuntimeError: If any of the three exports fails.
+    """
+    archive_options = manager.createFusionArchiveExportOptions(
+        os.path.join(folder, f'{prefix}-assembly'), root)
+    step_options = manager.createSTEPExportOptions(
+        os.path.join(folder, f'{prefix}-assembly.step'), root)
+    assembly_stl_options = manager.createSTLExportOptions(
+        root, os.path.join(folder, f'{prefix}-assembly'))
+    assembly_stl_options.sendToPrintUtility = False
+
+    if not manager.execute(archive_options):
+        raise RuntimeError('Fusion archive export failed for the assembly.')
+    if not manager.execute(step_options):
+        raise RuntimeError('STEP export failed for the assembly.')
+    if not manager.execute(assembly_stl_options):
+        raise RuntimeError('STL export failed for the assembly.')
+
+
+def _collect_bodies(root: adsk.fusion.Component) -> List[Tuple[str, adsk.fusion.BRepBody]]:
+    """Find every solid body in the design, however it's organized.
+
+    A component can hold several bodies, and exporting one STL per
+    top-level occurrence would merge those bodies into a single file.
+    This instead walks bodies sitting directly in the root component and
+    bodies inside every occurrence — including nested sub-assemblies —
+    so each individual body gets its own entry.
+
+    Args:
+        root: The design's root component.
+
+    Returns:
+        A list of (label, body) pairs, where label combines the owning
+        component/occurrence name and the body's own name, e.g.
+        'Bracket-Body1'.
+    """
+    bodies: List[Tuple[str, adsk.fusion.BRepBody]] = []
+
+    for body in root.bRepBodies:
+        if body.isSolid and body.isVisible:
+            bodies.append((f'{root.name}-{body.name}', body))
+
+    for occurrence in root.allOccurrences:
+        if not occurrence.isVisible:
+            continue
+        for body in occurrence.bRepBodies:
+            if body.isSolid and body.isVisible:
+                bodies.append((f'{occurrence.name}-{body.name}', body))
+
+    return bodies
+
+def _export_bodies(
+    manager: adsk.fusion.ExportManager,
+    root: adsk.fusion.Component,
+    folder: str,
+    prefix: str,
+) -> List[str]:
+    """Export every solid body in the design as its own printable STL.
+
+    Args:
+        manager: The active design's export manager.
+        root: The design's root component; every body reachable from it
+            (its own bodies, plus bodies inside every occurrence at any
+            nesting depth) is exported individually.
+        folder: Destination directory for the exported files.
+        prefix: Filename prefix, derived from the source file's name and version.
+
+    Returns:
+        The labels of the bodies that were exported, in export order.
+
+    Raises:
+        RuntimeError: If the STL export fails for any body.
+    """
+    exported_bodies: List[str] = []
+    for label, body in _collect_bodies(root):
+        safe_label: str = _sanitize_filename(label)
+        options = manager.createSTLExportOptions(body, os.path.join(folder, f'{prefix}-{safe_label}'))
+        options.sendToPrintUtility = False
+        if not manager.execute(options):
+            raise RuntimeError(f'STL export failed for {label}')
+        exported_bodies.append(label)
+    return exported_bodies
+
+
+def _write_manifest(app: adsk.core.Application, folder: str, exported_bodies: List[str]) -> None:
+    """Write a JSON summary of the export next to the exported files.
+
+    Args:
+        app: The running Fusion application, used to read the source
+            design's file metadata.
+        folder: Destination directory; the manifest is written as
+            'fusion-export.json' inside it.
+        exported_bodies: Labels of the bodies exported as individual
+            STLs, as returned by _export_bodies.
+    """
+    source: adsk.core.DataFile = app.activeDocument.dataFile
+    export_record: Dict[str, Any] = {
+        'source_design': {'id': source.id, 'version': source.versionNumber, 'name': source.name},
+        'exported_bodies': exported_bodies,
+        'exported_at': datetime.now(timezone.utc).isoformat(),
+    }
+    with open(os.path.join(folder, 'fusion-export.json'), 'w', encoding='utf-8') as record:
+        json.dump(export_record, record, indent=2)
+
+
+def run(context: Dict[str, Any]) -> None:
+    """Add-in entry point: register the command and add it to the panel.
+
+    Args:
+        context: Fusion's add-in run context (unused).
+    """
+    app: adsk.core.Application = adsk.core.Application.get()
+    ui: adsk.core.UserInterface = app.userInterface
+    command_definition = ui.commandDefinitions.itemById(COMMAND_ID)
+    if command_definition:
+        command_definition.deleteMe()
+    command_definition = ui.commandDefinitions.addButtonDefinition(
+        COMMAND_ID, COMMAND_NAME,
+        'Export F3D, STEP, and STL for the whole design, plus per-part STL for printing.')
     created = CommandCreated()
-    command.commandCreated.add(created)
+    command_definition.commandCreated.add(created)
     handlers.append(created)
-    panel = ui.allToolbarPanels.itemById('SolidScriptsAddinsPanel')
-    panel.controls.addCommand(command)
+    panel: adsk.core.ToolbarPanel = ui.allToolbarPanels.itemById('SolidScriptsAddinsPanel')
+    panel.controls.addCommand(command_definition)
 
 
-def stop(context):
-    app = adsk.core.Application.get()
-    ui = app.userInterface
+def stop(context: Dict[str, Any]) -> None:
+    """Add-in teardown: remove the command from the panel and delete it.
+
+    Args:
+        context: Fusion's add-in stop context (unused).
+    """
+    app: adsk.core.Application = adsk.core.Application.get()
+    ui: adsk.core.UserInterface = app.userInterface
     control = ui.allToolbarPanels.itemById('SolidScriptsAddinsPanel').controls.itemById(COMMAND_ID)
     if control:
         control.deleteMe()
-    command = ui.commandDefinitions.itemById(COMMAND_ID)
-    if command:
-        command.deleteMe()
+    command_definition = ui.commandDefinitions.itemById(COMMAND_ID)
+    if command_definition:
+        command_definition.deleteMe()
