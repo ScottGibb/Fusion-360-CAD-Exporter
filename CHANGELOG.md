@@ -2,7 +2,6 @@
 
 ## [1.2.0](https://github.com/ScottGibb/Fusion-360-CAD-Exporter/compare/v1.1.0...v1.2.0) (2026-08-27)
 
-
 ### Features
 
 * Add Capture Image Function ([381b54b](https://github.com/ScottGibb/Fusion-360-CAD-Exporter/commit/381b54b20f1e7e40f3ecccb25c77ece0149b26aa))
