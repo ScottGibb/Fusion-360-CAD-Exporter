@@ -192,12 +192,12 @@ def _capture_model_image(
     width: int = 1920,
     height: int = 1080,
 ) -> None:
-    """Capture a PNG of the active model with hidden origin planes, transparent background, and fitted view.
+    """Capture a transparent PNG of the active model without the layout grid.
 
-    Temporarily turns off origin and construction geometry visibility on the
-    root component, resizes the viewport camera to fit the full design, and
-    saves an image file with background transparency enabled. Restores original
-    visibility settings upon completion.
+    Temporarily turns off the layout grid plus origin and construction geometry
+    visibility on the root component, resizes the viewport camera to fit the
+    full design, and saves an anti-aliased image with background transparency
+    enabled. Restores the original visibility settings upon completion.
 
     Args:
         app: Fusion application instance.
@@ -214,18 +214,40 @@ def _capture_model_image(
 
     was_origin_visible = root.isOriginFolderLightBulbOn
     was_construction_visible = root.isConstructionFolderLightBulbOn
+    layout_grid_item: adsk.core.ListItem = None
+    was_layout_grid_visible = False
 
     try:
+        grid_command: adsk.core.CommandDefinition = (
+            app.userInterface.commandDefinitions.itemById("ViewLayoutGridCommand")
+        )
+        if grid_command:
+            grid_control: adsk.core.ListControlDefinition = (
+                adsk.core.ListControlDefinition.cast(grid_command.controlDefinition)
+            )
+            if grid_control and grid_control.listItems.count:
+                layout_grid_item = grid_control.listItems.item(0)
+                was_layout_grid_visible = layout_grid_item.isSelected
+                layout_grid_item.isSelected = False
+
         root.isOriginFolderLightBulbOn = False
         root.isConstructionFolderLightBulbOn = False
 
         viewport.fit()
         viewport.refresh()
 
-        success = viewport.saveAsImageFile(output_path, width, height)
+        image_options = adsk.core.SaveImageFileOptions.create(output_path)
+        image_options.width = width
+        image_options.height = height
+        image_options.isAntiAliased = True
+        image_options.isBackgroundTransparent = True
+
+        success = viewport.saveAsImageFileWithOptions(image_options)
         if not success:
             raise RuntimeError("Failed to save viewport image.")
     finally:
+        if layout_grid_item:
+            layout_grid_item.isSelected = was_layout_grid_visible
         root.isOriginFolderLightBulbOn = was_origin_visible
         root.isConstructionFolderLightBulbOn = was_construction_visible
         viewport.refresh()
