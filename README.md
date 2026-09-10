@@ -5,7 +5,7 @@
 Two Fusion export tools maintained in one repository and released independently. Each tool has its own version, changelog, release PR, Git tag, and GitHub release. Download the repository at a chosen release and register the tool folders in Fusion.
 
 | Tool                                               | Run from                   | Outputs                                                                                             |
-| -------------------------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------------- |
+|----------------------------------------------------|----------------------------|-----------------------------------------------------------------------------------------------------|
 | [Export 3D Model Release](Export3DModelRelease/)   | A design, **Add-Ins** tab  | Assembly F3D, STEP and STL, individual body STLs, transparent preview PNG, and `fusion-export.json` |
 | [Export Drawing PDF and Images](ExportDrawingPDF/) | A drawing, **Scripts** tab | One PDF containing every sheet, plus a PNG, JPEG, or both for each sheet                            |
 
@@ -95,10 +95,10 @@ Use `--overwrite` to replace existing numbered images, or `--dpi` to choose a re
 
 Release Please manages a separate GitHub release for each tool:
 
-| Tool | Version and changelog | Release tag |
-| --- | --- | --- |
-| Model add-in | `Export3DModelRelease/version.txt` and `CHANGELOG.md` in that folder | `Export3DModelRelease-vX.Y.Z` |
-| Drawing script | `ExportDrawingPDF/version.txt` and `CHANGELOG.md` in that folder | `ExportDrawingPDF-vX.Y.Z` |
+| Tool           | Version and changelog                                                | Release tag                   |
+|----------------|----------------------------------------------------------------------|-------------------------------|
+| Model add-in   | `Export3DModelRelease/version.txt` and `CHANGELOG.md` in that folder | `Export3DModelRelease-vX.Y.Z` |
+| Drawing script | `ExportDrawingPDF/version.txt` and `CHANGELOG.md` in that folder     | `ExportDrawingPDF-vX.Y.Z`     |
 
 Choose a release with the prefix for the tool you want to install or update. Each release's source download contains the entire repository at that tag, including both tool folders. Each folder's `version.txt` identifies the included tool version; the tools can have different versions in the same download. Follow the installation steps above to register either or both folders in Fusion.
 
