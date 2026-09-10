@@ -5,7 +5,7 @@
 Two Fusion export tools maintained together in one repository and released with a shared version.
 
 | Tool                                               | Run from                   | Outputs                                                                                             |
-| -------------------------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------------- |
+|----------------------------------------------------|----------------------------|-----------------------------------------------------------------------------------------------------|
 | [Export 3D Model Release](Export3DModelRelease/)   | A design, **Add-Ins** tab  | Assembly F3D, STEP and STL, individual body STLs, transparent preview PNG, and `fusion-export.json` |
 | [Export Drawing PDF and Images](ExportDrawingPDF/) | A drawing, **Scripts** tab | One PDF containing every sheet, plus a PNG, JPEG, or both for each sheet                            |
 
