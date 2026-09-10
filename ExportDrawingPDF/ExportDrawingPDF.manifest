@@ -1,0 +1,10 @@
+{
+  "autodeskProduct": "Fusion360",
+  "type": "script",
+  "id": "drawing-pdf-image-exporter",
+  "author": "Scott Gibb",
+  "description": "Export the active drawing to PDF, then convert every sheet to PNG or JPEG.",
+  "version": "1.2.0",
+  "runOnStartup": false,
+  "supportedOS": "mac|windows"
+}

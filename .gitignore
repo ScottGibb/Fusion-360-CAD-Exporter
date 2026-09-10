@@ -1,2 +1,5 @@
 .DS_Store
 megalinter-reports/
+__pycache__/
+*.py[cod]
+.ruff_cache/
