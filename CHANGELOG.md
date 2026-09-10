@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/ScottGibb/Fusion-360-CAD-Exporter/compare/v1.2.0...v1.3.0) (2026-09-10)
+
+
+### Features
+
+* add Export PDF Scripts ([2fe41aa](https://github.com/ScottGibb/Fusion-360-CAD-Exporter/commit/2fe41aab75bd91884d78649f19dd3df56a1babb3))
+
 ## [1.2.0](https://github.com/ScottGibb/Fusion-360-CAD-Exporter/compare/v1.1.0...v1.2.0) (2026-08-27)
 
 ### Features
