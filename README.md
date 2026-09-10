@@ -2,7 +2,7 @@
 
 [![MegaLinter](https://github.com/ScottGibb/Fusion-360-CAD-Exporter/actions/workflows/mega-linter.yaml/badge.svg)](https://github.com/ScottGibb/Fusion-360-CAD-Exporter/actions/workflows/mega-linter.yaml)
 
-Two Fusion export tools maintained together in one repository and released with a shared version.
+Two Fusion export tools maintained in one repository and released independently. Each tool has its own version, changelog, release PR, Git tag, and GitHub release. Download the repository at a chosen release and register the tool folders in Fusion.
 
 | Tool                                               | Run from                   | Outputs                                                                                             |
 | -------------------------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -15,29 +15,37 @@ Two Fusion export tools maintained together in one repository and released with 
 Fusion-360-CAD-Exporter/
 ├── Export3DModelRelease/
 │   ├── Export3DModelRelease.py
-│   └── Export3DModelRelease.manifest
+│   ├── Export3DModelRelease.manifest
+│   ├── version.txt
+│   ├── CHANGELOG.md
+│   └── README.md
 ├── ExportDrawingPDF/
 │   ├── ExportDrawingPDF.py
 │   ├── ExportDrawingPDF.manifest
-│   └── pdf_to_images.py
+│   ├── pdf_to_images.py
+│   ├── version.txt
+│   ├── CHANGELOG.md
+│   └── README.md
 ├── tests/
 ├── .github/
-└── version.txt
+├── release-please-config.json
+└── .release-please-manifest.json
 ```
 
 Each tool folder is self-contained and can be registered separately in Fusion. Keep its Python files and manifest together.
 
 ## Installation
 
-1. Clone or download this repository to a permanent folder, such as `Projects/Fusion-360-CAD-Exporter`.
-2. In Fusion, open **Utilities > Scripts and Add-Ins** or press **Shift+S**.
-3. On the **Add-Ins** tab, click **+** and select this repository's `Export3DModelRelease` folder. Select the add-in and click **Run**.
-4. On the **Scripts** tab, click **+** and select this repository's `ExportDrawingPDF` folder. Run it when a drawing is active.
-5. For drawing image conversion, install [uv](https://docs.astral.sh/uv/getting-started/installation/) if it is not already available.
+1. Open [GitHub Releases](https://github.com/ScottGibb/Fusion-360-CAD-Exporter/releases), choose the version you want, and download its **Source code** archive. Alternatively, clone the repository and check out that release's tag.
+2. Extract the repository into a permanent folder, such as `Projects/Fusion-360-CAD-Exporter`. Keep the complete repository together; it contains both tools.
+3. In Fusion, open **Utilities > Scripts and Add-Ins** or press **Shift+S**.
+4. On the **Add-Ins** tab, click **+** and select the `Export3DModelRelease` subfolder inside the downloaded repository. Select the add-in and click **Run**.
+5. On the **Scripts** tab, click **+** and select the `ExportDrawingPDF` subfolder inside the same repository. Run it when a drawing is active.
+6. For drawing image conversion, install [uv](https://docs.astral.sh/uv/getting-started/installation/) if it is not already available.
 
 Alternatively, place `Export3DModelRelease` in Fusion's `API/AddIns` directory and `ExportDrawingPDF` in `API/Scripts`. For a development checkout, those entries can be symbolic links to the tool folders, so repository updates are picked up from the same source files.
 
-After updating the model add-in, stop it and run it again to load the latest code. The drawing script loads when you run it.
+To update, stop the model add-in, download the desired repository version, and replace the files at the same location. If you use a different folder, update the Fusion registrations to point at its tool subfolders. Run the add-in again to load the updated code. The drawing script loads when you run it.
 
 ### Upgrading from the original single-tool layout
 
@@ -83,23 +91,23 @@ uv run --script ExportDrawingPDF/pdf_to_images.py "/path/to/drawing.pdf" --forma
 
 Use `--overwrite` to replace existing numbered images, or `--dpi` to choose a resolution between 72 and 600.
 
-## Development and Releases
+## Independent Releases
 
-Run the checks from the repository root:
+Release Please manages a separate GitHub release for each tool:
 
-```sh
-python3 -B -m unittest discover -s tests -v
-uv run --script tests/test_pdf_images.py
-ruff check --no-cache Export3DModelRelease ExportDrawingPDF tests .github/scripts
-ruff format --check --no-cache Export3DModelRelease ExportDrawingPDF tests .github/scripts
-```
+| Tool | Version and changelog | Release tag |
+| --- | --- | --- |
+| Model add-in | `Export3DModelRelease/version.txt` and `CHANGELOG.md` in that folder | `Export3DModelRelease-vX.Y.Z` |
+| Drawing script | `ExportDrawingPDF/version.txt` and `CHANGELOG.md` in that folder | `ExportDrawingPDF-vX.Y.Z` |
 
-The unittest suite checks Fusion adapters with a simulated API and verifies the shared release updater. The uv command checks real multipage PDF rendering and file preservation. These checks do not replace running the tools inside Fusion.
+Choose a release with the prefix for the tool you want to install or update. Each release's source download contains the entire repository at that tag, including both tool folders. Each folder's `version.txt` identifies the included tool version; the tools can have different versions in the same download. Follow the installation steps above to register either or both folders in Fusion.
 
-Release Please maintains `version.txt` and `CHANGELOG.md`. The manifest updater applies that shared version to both tool manifests:
+Each tool starts from its existing version, **1.2.0**, and evolves independently. The previous model release history is preserved in `Export3DModelRelease/CHANGELOG.md`; the old `v1.x` tags remain historical releases. Those older tags use the original layout with only the model add-in at the repository root. Choose a new component release for the two-tool layout.
 
-```sh
-python3 .github/scripts/update-manifest.py
-```
+### Maintaining releases
 
-The updater resolves the repository from its own location, so it also works when invoked from another directory. `VERSION_FILE_PATH` overrides the version source; `MANIFEST_FILE_PATH` retains the option to update a single custom manifest. Both tools remain part of the same release and repository history.
+Use Conventional Commits for changes inside the appropriate tool folder, for example `fix(Export3DModelRelease): hide joint markers` or `feat(ExportDrawingPDF): add an image option`. Release Please assigns changes by file path. A change to one tool can release that tool alone; a change affecting both can create two release PRs. Changes confined to shared workflows or root documentation do not by themselves require a tool release.
+
+On pushes to `main`, the Release Please workflow uses `release-please-config.json` and `.release-please-manifest.json` to open or update each tool's release PR. Merging a release PR updates that tool's `version.txt`, `CHANGELOG.md`, Fusion `.manifest` version, and release manifest entry, then creates its Git tag and GitHub release. The existing `MY_RELEASE_PLEASE_TOKEN` secret is used for release PRs and releases.
+
+The release workflow handles versioning and GitHub releases only. GitHub provides the repository source downloads for each tag. The bootstrap commit in the configuration starts the new release histories immediately before the drawing script was introduced. New component releases become available after this configuration and the resulting release PRs are merged.

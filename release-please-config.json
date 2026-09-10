@@ -1,0 +1,31 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "f656ae6c1cecab482260f00cf205ba1af2b2d634",
+  "separate-pull-requests": true,
+  "include-component-in-tag": true,
+  "tag-separator": "-",
+  "packages": {
+    "Export3DModelRelease": {
+      "release-type": "simple",
+      "component": "Export3DModelRelease",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "Export3DModelRelease.manifest",
+          "jsonpath": "$.version"
+        }
+      ]
+    },
+    "ExportDrawingPDF": {
+      "release-type": "simple",
+      "component": "ExportDrawingPDF",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "ExportDrawingPDF.manifest",
+          "jsonpath": "$.version"
+        }
+      ]
+    }
+  }
+}
