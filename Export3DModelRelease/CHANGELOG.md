@@ -2,7 +2,6 @@
 
 ## [1.3.0](https://github.com/ScottGibb/Fusion-360-CAD-Exporter/compare/Export3DModelRelease-v1.2.0...Export3DModelRelease-v1.3.0) (2026-09-10)
 
-
 ### Features
 
 * add the CAD Exporter Addin back ([4a31e9d](https://github.com/ScottGibb/Fusion-360-CAD-Exporter/commit/4a31e9d3d503938cbb8dd56cd2a0604790ee05e8))
